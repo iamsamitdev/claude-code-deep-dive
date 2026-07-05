@@ -667,7 +667,6 @@ enum TransactionType {
   IN   // รับสินค้าเข้า
   OUT  // เบิกจ่ายสินค้า
 }
-```
 
 ### Product
 | Field | Type | หมายเหตุ |

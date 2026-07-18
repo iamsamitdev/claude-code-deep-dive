@@ -152,6 +152,39 @@ OpenSSH (v6)               ALLOW IN    Anywhere (v6)
 
 ---
 
+### 🛠️ ขั้นตอนที่ 1.5: ตั้ง Timezone ของเซิร์ฟเวอร์เป็นเวลาไทย
+
+VPS ส่วนใหญ่ตั้งเวลาเริ่มต้นเป็น UTC ซึ่งจะทำให้ log ทุกไฟล์และ cron job (เช่น backup ตอนตี 2 ในขั้นตอนที่ 11) ทำงานตามเวลา UTC ไม่ใช่เวลาไทย ก่อนติดตั้งอย่างอื่นจึงควรตั้ง timezone ให้ถูกต้องก่อน
+
+**💬 Prompt ที่ใช้สั่ง Claude Code:**
+```
+ช่วยบอกคำสั่งตั้ง timezone ของ Ubuntu server เป็น Asia/Bangkok
+และคำสั่งตรวจสอบว่าตั้งถูกต้องแล้ว พร้อมอธิบายว่าทำไม production
+ควรตั้ง timezone ให้ตรงกับผู้ใช้งานจริง
+```
+
+**🤖 Claude Code จะทำอะไร:** Claude แนะนำคำสั่ง `timedatectl` และอธิบายผลต่อ log/cron ให้เข้าใจก่อนรัน
+
+**✅ Checkpoint ตรวจสอบ:**
+- `timedatectl` หรือ `date` ต้องแสดงเวลาเป็น `+07` (ICT) ไม่ใช่ UTC
+- ทำขั้นตอนนี้ **ก่อน** ตั้ง cron backup เพื่อให้เวลา 02:00 เป็นตี 2 เวลาไทยจริง
+
+**📄 คำสั่ง/ไฟล์อ้างอิง — ผลลัพธ์ที่ควรได้ (ไว้เทียบ):**
+```bash
+# ตั้ง timezone เป็นเวลาไทย
+sudo timedatectl set-timezone Asia/Bangkok
+
+# ตรวจสอบ
+timedatectl
+# Time zone: Asia/Bangkok (+07, ...)
+date
+# ... +07 (ICT)
+```
+
+> **Key Concept:** ตั้ง timezone ที่ระดับ OS ครั้งเดียว มีผลกับ log ของระบบและ cron ส่วน container แต่ละตัวยังต้องตั้ง `TZ` และ mount `/etc/localtime` แยกอีกชั้น (ดูใน docker-compose.prod.yml ขั้นตอนที่ 5)
+
+---
+
 ### 🛠️ ขั้นตอนที่ 2: สร้าง SSH Key Pair และ Config บนเครื่อง Local
 
 **💬 Prompt ที่ใช้สั่ง Claude Code:**
@@ -317,8 +350,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Bangkok
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - app-network
     healthcheck:
@@ -336,8 +371,11 @@ services:
       BETTER_AUTH_URL: https://stock.aibisec.com
       NEXT_PUBLIC_APP_URL: https://stock.aibisec.com
       NODE_ENV: production
+      TZ: Asia/Bangkok
     ports:
       - "3000:3000"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       db:
         condition: service_healthy
@@ -400,6 +438,79 @@ curl http://localhost:3000
 ```
 
 > **Key Concept:** `prisma migrate deploy` แค่ apply migration files ที่มีอยู่แล้ว ไม่ได้สร้าง migration ใหม่ — เหมาะสำหรับ production เพราะปลอดภัยและ predictable
+
+---
+
+### 🛠️ ขั้นตอนที่ 6.1: (ทางเลือก) ใช้ entrypoint.sh รัน Migrate อัตโนมัติตอน Container Start
+
+ในขั้นตอนที่ 6 เรารัน `prisma migrate deploy` ด้วยมือหลัง container ขึ้น อีกแนวทางที่นิยมในงานจริงคือให้ container **รัน migrate เองอัตโนมัติทุกครั้งที่ start** ผ่านไฟล์ `entrypoint.sh` ที่กำหนดไว้ใน Dockerfile ข้อดีคือลดโอกาสลืมรัน migrate ทำให้ schema ตรงกับโค้ดเสมอ
+
+**💬 Prompt ที่ใช้สั่ง Claude Code:**
+```
+ช่วยร่างไฟล์ entrypoint.sh สำหรับ Next.js standalone + Prisma ที่:
+1. รัน npx prisma migrate deploy ก่อน
+2. จากนั้น exec node server.js เพื่อ start แอป
+พร้อมบอกวิธีอ้างถึงใน Dockerfile ด้วย ENTRYPOINT และเหตุผลที่ต้องใช้ exec
+```
+
+**🤖 Claude Code จะทำอะไร:** Claude ร่าง `entrypoint.sh` ที่รัน migrate ก่อนแล้วค่อย start server และอธิบายการผูกกับ Dockerfile ให้เราตรวจ logic ก่อนใช้จริง
+
+**✅ Checkpoint ตรวจสอบ:**
+- ไฟล์ต้องเป็น LF line ending (ไม่ใช่ CRLF) ไม่งั้น container จะ error `no such file`
+- ใช้ `exec` เรียก process สุดท้าย เพื่อให้ signal (SIGTERM) ส่งถึงแอปตอน stop container
+- ถ้าใช้ entrypoint แบบนี้แล้ว ใน CD (ขั้นตอนที่ 10) ไม่ต้องรัน migrate ซ้ำอีก
+
+**📄 คำสั่ง/ไฟล์อ้างอิง — ผลลัพธ์ที่ควรได้ (ไว้เทียบ):**
+```bash
+#!/bin/sh
+set -e
+
+echo "==> Applying database migrations"
+npx prisma migrate deploy
+
+echo "==> Starting Next.js server"
+exec node server.js
+```
+
+ผูกใน Dockerfile (stage runner):
+```dockerfile
+COPY --chown=nextjs:nodejs entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
+```
+
+> **Key Concept:** entrypoint migrate อัตโนมัติเหมาะกับทีมที่ deploy บ่อย แต่ถ้ามีแอปหลาย instance รันพร้อมกัน ควรให้ที่เดียวรัน migrate เพื่อกันชนกัน สำหรับ lab นี้ที่มี app instance เดียวใช้ได้อย่างปลอดภัย
+
+---
+
+### 🛠️ ขั้นตอนที่ 6.2: (ทางเลือก) Seed หรือ Restore ข้อมูลเดิมเข้าฐานข้อมูลใหม่
+
+`prisma migrate deploy` สร้างแค่ **โครงสร้างตาราง (schema)** แต่ไม่ได้ใส่ข้อมูล ถ้าอาจารย์ย้ายระบบจากเซิร์ฟเวอร์เก่าหรือต้องมีข้อมูลตั้งต้น มี 2 วิธีหลัก
+
+**วิธีที่ 1: Auto-seed ตอนสร้าง database ครั้งแรก (mount ไฟล์ .sql)**
+
+Postgres จะรันทุกไฟล์ใน `/docker-entrypoint-initdb.d/` ให้อัตโนมัติ **เฉพาะครั้งแรกที่ volume ยังว่าง** เพิ่ม mount ใน service `db` ของ docker-compose.prod.yml:
+```yaml
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backup/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /etc/localtime:/etc/localtime:ro
+```
+
+**วิธีที่ 2: Restore เข้า database ที่รันอยู่แล้ว (ทำภายหลังได้ทุกเมื่อ)**
+```bash
+# นำไฟล์ backup ขึ้น server ก่อน (scp) แล้ว restore เข้า container db
+cat backup/db_20260718.sql | \
+  docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+```
+
+**✅ Checkpoint ตรวจสอบ:**
+- วิธีที่ 1 ทำงาน **ครั้งแรกเท่านั้น** ถ้า volume `postgres_data` มีข้อมูลแล้ว ไฟล์ init.sql จะถูกข้าม
+- ถ้าไฟล์ .sql เป็น full dump ที่มี `CREATE TABLE` อยู่แล้ว ให้ระวังชนกับตารางที่ migrate สร้าง เลือกอย่างใดอย่างหนึ่ง (migrate อย่างเดียว หรือ restore full dump อย่างเดียว)
+- ตรวจข้อมูลหลัง restore ด้วย `psql -c "SELECT count(*) FROM ..."`
+
+> **Key Concept:** แยกให้ชัดระหว่าง **schema** (มาจาก migrate) กับ **data** (มาจาก seed/restore) ระบบใหม่ที่เริ่มจากศูนย์ใช้ migrate อย่างเดียวพอ แต่ถ้าย้ายข้อมูลเดิมให้ใช้ restore แล้วไม่ต้องรัน migrate ทับ
 
 ---
 
@@ -865,6 +976,39 @@ jobs:
 | `VPS_SSH_PRIVATE_KEY` | เนื้อหาของ `~/.ssh/stock_app_deploy` (private key ทั้งหมด) |
 | `GHCR_PAT` | GitHub Personal Access Token (read:packages) |
 | `GHCR_USERNAME` | GitHub username ของคุณ |
+
+---
+
+### 🛠️ ขั้นตอนที่ 10.1: อัปเดตไฟล์ docker-compose.prod.yml บน Server เมื่อมีการแก้ไข
+
+**ข้อควรระวังสำคัญ:** deploy.yml ในขั้นตอนที่ 10 สั่งเพียง `docker compose pull` + `up -d` ซึ่ง **ดึงเฉพาะ image ใหม่** เท่านั้น ไม่ได้อัปเดตไฟล์ `docker-compose.prod.yml` บน server ดังนั้นถ้าอาจารย์แก้ compose (เพิ่ม service, เพิ่ม env, เปลี่ยน port, เพิ่ม TZ/volume) การ push โค้ดอย่างเดียวจะ **ไม่มีผล** จนกว่าจะอัปเดตไฟล์บน server ก่อน มี 2 แนวทางหลัก
+
+**แนวทางที่ 1: scp ขึ้นไปตรง ๆ (ง่าย เหมาะกับ lab)**
+```bash
+# รันบนเครื่อง local — ส่งไฟล์ compose ล่าสุดขึ้น server
+scp docker-compose.prod.yml deploy@stock.aibisec.com:/home/deploy/stock-app/
+
+# แล้ว SSH เข้าไป restart ให้ compose ใหม่มีผล
+ssh stockapp "cd /home/deploy/stock-app && docker compose -f docker-compose.prod.yml up -d"
+```
+
+**แนวทางที่ 2: ให้ server git pull ก่อน pull image (เหมาะกับทีม)**
+
+เก็บ `docker-compose.prod.yml` ไว้ใน repo แล้วเพิ่มคำสั่ง `git pull` ใน script ของ deploy.yml ก่อน `docker compose pull` วิธีนี้ทุก deploy จะได้ไฟล์ compose ล่าสุดอัตโนมัติ (ต้อง clone repo ไว้ที่ `/home/deploy/stock-app` และตั้ง read-only deploy key บน server)
+```yaml
+            echo "==> Sync latest compose file"
+            git pull origin main
+
+            echo "==> Pulling latest image"
+            docker compose -f docker-compose.prod.yml pull
+```
+
+**✅ Checkpoint ตรวจสอบ:**
+- ถ้าแก้เฉพาะโค้ดแอป (ไม่แตะ compose) ไม่ต้องทำขั้นตอนนี้ - deploy.yml เดิมพออยู่แล้ว
+- ถ้าใช้แนวทางที่ 2 ต้องแน่ใจว่า `.env` **ไม่ถูก commit** (อยู่ใน .gitignore) และมีอยู่บน server แล้ว
+- หลัง sync ตรวจด้วย `docker compose -f docker-compose.prod.yml config` ว่าไฟล์ถูกอ่านถูกต้อง
+
+> **Key Concept:** โมเดลของ lab นี้คือ "server เก็บแค่ compose + .env ส่วน image มาจาก ghcr.io" ต่างจากการ git clone ทั้งโปรเจกต์ลง server ข้อดีคือ server สะอาดและเบา แต่ต้องมีวิธี sync ไฟล์ compose แยกต่างหากเมื่อมันเปลี่ยน
 
 ---
 

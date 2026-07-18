@@ -1,0 +1,10 @@
+{
+  "name": "stock-squad",
+  "description": "ทีมยกระดับคุณภาพ stock-app (ข้อมูลตัวอย่างสำหรับเดโม Mission Control)",
+  "members": [
+    { "name": "team-lead", "role": "lead" },
+    { "name": "reviewer", "role": "teammate" },
+    { "name": "tester", "role": "teammate" },
+    { "name": "doc-writer", "role": "teammate" }
+  ]
+}

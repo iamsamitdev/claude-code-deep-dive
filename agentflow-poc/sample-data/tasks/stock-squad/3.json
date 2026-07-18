@@ -1,0 +1,7 @@
+{
+  "id": "3",
+  "subject": "เขียน unit test ให้ lib/validations.ts",
+  "description": "productSchema ต้องไม่รับ quantity และ stockMovementSchema ต้อง positive เท่านั้น",
+  "status": "pending",
+  "owner": "tester"
+}

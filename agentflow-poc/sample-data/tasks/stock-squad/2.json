@@ -1,0 +1,7 @@
+{
+  "id": "2",
+  "subject": "เขียน unit test ให้ lib/product-status.ts",
+  "description": "ครอบคลุม 3 สถานะ: หมด / ใกล้หมด / ปกติ รวม edge case reorderPoint = 0",
+  "status": "in_progress",
+  "owner": "tester"
+}

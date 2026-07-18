@@ -1,0 +1,7 @@
+{
+  "id": "1",
+  "subject": "รีวิว Server Actions ทั้งหมดใน app/actions/",
+  "description": "ตรวจ error handling, ActionResult และการ filter deletedAt: null",
+  "status": "completed",
+  "owner": "reviewer"
+}

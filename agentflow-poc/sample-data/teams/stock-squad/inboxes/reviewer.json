@@ -1,0 +1,14 @@
+[
+  {
+    "from": "team-lead",
+    "to": "reviewer",
+    "text": "เริ่มรีวิว app/actions/ ก่อน โฟกัส error handling กับ deletedAt filter",
+    "timestamp": "2026-07-17T20:41:12+07:00"
+  },
+  {
+    "from": "tester",
+    "to": "reviewer",
+    "text": "เจอ edge case ใน getStockStatus ตอน reorderPoint = 0 ฝากดูตอนรีวิวด้วย",
+    "timestamp": "2026-07-17T20:48:35+07:00"
+  }
+]

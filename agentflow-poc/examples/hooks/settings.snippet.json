@@ -1,0 +1,28 @@
+{
+  "//": "ตัวอย่าง hooks สำหรับ Agent Teams — นำ block 'hooks' ไปรวมใน .claude/settings.json ของโปรเจกต์ที่รันทีม (เช่น stock-app) แล้วแก้ path ให้ชี้ไฟล์ agentflow-log.mjs จริงในเครื่องคุณ",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/TrainingDocument/Claude Code Deep Dive/agentflow-poc/examples/hooks/agentflow-log.mjs\" TeammateIdle"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/TrainingDocument/Claude Code Deep Dive/agentflow-poc/examples/hooks/agentflow-log.mjs\" TaskCompleted"
+          }
+        ]
+      }
+    ]
+  }
+}
